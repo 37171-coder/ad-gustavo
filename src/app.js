@@ -39,9 +39,21 @@ app.use(express.static(frontendPath));
 
 // Middleware para garantir conexão com MongoDB antes de atender as requisições em ambiente Serverless
 app.use(async (req, res, next) => {
-  // Ignora conexão em rotas de status rápido ou quando explicitamente sem URI
-  if (req.path === '/api/health' || !process.env.MONGODB_URI) {
+  // O endpoint de healthcheck e rotas estáticas não bloqueiam se não houver banco
+  if (req.path === '/api/health' || req.path === '/api' || !req.path.startsWith('/api')) {
     return next();
+  }
+
+  // Se não houver MONGODB_URI definida em produção (Vercel)
+  if (!process.env.MONGODB_URI && process.env.NODE_ENV === 'production') {
+    return res.status(503).json({
+      success: false,
+      message: 'Banco de dados não configurado na Vercel.',
+      errors: [
+        'A variável de ambiente MONGODB_URI não foi definida no painel da Vercel.',
+        'Acesse as configurações do seu projeto na Vercel (Settings > Environment Variables) e cadastre a variável MONGODB_URI com a string de conexão do seu MongoDB Atlas.',
+      ],
+    });
   }
 
   try {
@@ -51,8 +63,11 @@ app.use(async (req, res, next) => {
     console.error('[Database Middleware]: Erro ao conectar ao MongoDB:', error.message);
     return res.status(503).json({
       success: false,
-      message: 'Serviço temporariamente indisponível. Erro ao conectar ao banco de dados.',
-      errors: ['Não foi possível estabelecer comunicação com o MongoDB.'],
+      message: 'Falha na conexão com o banco de dados MongoDB.',
+      errors: [
+        error.message || 'Não foi possível estabelecer comunicação com o MongoDB.',
+        'Verifique se a MONGODB_URI está correta e se o IP 0.0.0.0/0 está liberado no Network Access do MongoDB Atlas.',
+      ],
     });
   }
 });
@@ -60,7 +75,7 @@ app.use(async (req, res, next) => {
 // Endpoint de saúde do sistema e do banco
 app.get('/api/health', (req, res) => {
   const dbStatus = getDatabaseState();
-  const isHealthy = dbStatus.isConnected;
+  const hasUri = !!process.env.MONGODB_URI;
 
   return res.status(200).json({
     success: true,
@@ -69,6 +84,12 @@ app.get('/api/health', (req, res) => {
     database: {
       status: dbStatus.status,
       connected: dbStatus.isConnected,
+      configured: hasUri,
+      message: dbStatus.isConnected
+        ? 'Banco de dados conectado com sucesso.'
+        : hasUri
+        ? 'Tentando conectar ao banco de dados...'
+        : 'Variável MONGODB_URI não configurada.',
     },
     environment: process.env.NODE_ENV || 'development',
   });
