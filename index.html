@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="GameVault — Mini Sistema para cadastro e catálogo de consoles e aparelhos gamer." />
+  <title>GameVault — Coleção de Aparelhos Gamer</title>
+  
+  <!-- Favicon SVG inline -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>" />
+  
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Header principal -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">🎮</div>
+        <div class="brand-info">
+          <h1>GameVault</h1>
+          <p class="brand-tagline">Catálogo & Acervo de Aparelhos Gamer</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Indicador de status do backend -->
+        <div id="apiStatusBadge" class="status-badge checking" title="Verificando conexão com a API">
+          <span class="status-dot"></span>
+          <span class="status-text">Conectando...</span>
+        </div>
+
+        <button id="btnOpenCreateModal" class="btn btn-primary">
+          <span class="btn-icon">+</span>
+          <span>Novo Aparelho</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Container principal -->
+  <main class="main-container">
+    <!-- Barra de busca, filtros e ordenação -->
+    <section class="controls-section" aria-label="Filtros e busca de aparelhos">
+      <div class="search-box">
+        <label for="searchInput" class="sr-only">Buscar por modelo, marca ou gênero</label>
+        <span class="search-icon" aria-hidden="true">🔍</span>
+        <input
+          type="search"
+          id="searchInput"
+          placeholder="Buscar por marca, modelo ou gênero..."
+          autocomplete="off"
+        />
+        <button id="btnClearSearch" class="btn-icon-clear hidden" aria-label="Limpar busca">&times;</button>
+      </div>
+
+      <div class="filters-group">
+        <div class="filter-item">
+          <label for="genreFilter">Gênero:</label>
+          <select id="genreFilter">
+            <option value="">Todos os Gêneros</option>
+            <option value="Console de Mesa">Console de Mesa</option>
+            <option value="Portátil">Portátil</option>
+            <option value="Retrô">Retrô</option>
+            <option value="Acessório Gamer">Acessório Gamer</option>
+            <option value="Realidade Virtual">Realidade Virtual</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+
+        <div class="filter-item">
+          <label for="sortSelect">Ordenar por:</label>
+          <select id="sortSelect">
+            <option value="recente">Mais Recentes</option>
+            <option value="ano-desc">Ano (Mais novos primeiro)</option>
+            <option value="ano-asc">Ano (Mais clássicos primeiro)</option>
+            <option value="preco-asc">Preço (Menor para maior)</option>
+            <option value="preco-desc">Preço (Maior para menor)</option>
+          </select>
+        </div>
+
+        <button id="btnReload" class="btn btn-secondary" title="Recarregar catálogo da API">
+          <span class="btn-icon">🔄</span>
+          <span class="btn-text">Atualizar</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Resumo dos resultados -->
+    <div class="results-summary">
+      <span id="resultsCount">Carregando aparelhos...</span>
+    </div>
+
+    <!-- Indicador de carregamento -->
+    <div id="loadingState" class="state-container" aria-live="polite">
+      <div class="spinner"></div>
+      <p>Consultando banco de dados...</p>
+    </div>
+
+    <!-- Mensagem de erro de API -->
+    <div id="errorState" class="state-container hidden" role="alert">
+      <div class="state-icon">⚠️</div>
+      <h3 id="errorMessageTitle">Não foi possível carregar os aparelhos</h3>
+      <p id="errorMessageDesc">Verifique se o backend está em execução ou confira a conexão.</p>
+      <button id="btnRetry" class="btn btn-primary">Tentar Novamente</button>
+    </div>
+
+    <!-- Mensagem de lista vazia -->
+    <div id="emptyState" class="state-container hidden">
+      <div class="state-icon">🕹️</div>
+      <h3>Nenhum aparelho encontrado</h3>
+      <p id="emptyStateText">Não há registros que correspondam aos filtros selecionados.</p>
+      <button id="btnClearFilters" class="btn btn-secondary">Limpar Filtros</button>
+    </div>
+
+    <!-- Grade de cards -->
+    <section id="gamesGrid" class="games-grid" aria-label="Lista de aparelhos gamer">
+      <!-- Cards serão injetados dinamicamente via JS -->
+    </section>
+  </main>
+
+  <!-- Rodapé -->
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p>GameVault &copy; 2026 — Mini Sistema de Games. Desenvolvido para fins de estudo e evolução técnica.</p>
+      <div class="footer-meta">
+        <span>Backend REST API</span> &bull;
+        <span>MongoDB Atlas</span> &bull;
+        <span>Vercel Serverless Ready</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modal de Criação / Edição -->
+  <div id="gameModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modalTitle">Cadastrar Novo Aparelho</h2>
+        <button id="btnCloseModal" class="btn-close-modal" aria-label="Fechar janela">&times;</button>
+      </div>
+
+      <form id="gameForm" novalidate>
+        <!-- Alerta de erro geral do formulário -->
+        <div id="formAlert" class="form-alert hidden" role="alert"></div>
+
+        <input type="hidden" id="gameId" />
+
+        <div class="form-row">
+          <div class="form-group flex-2">
+            <label for="formModelo">Modelo do Aparelho <span class="required">*</span></label>
+            <input
+              type="text"
+              id="formModelo"
+              name="modelo"
+              required
+              placeholder="Ex: PlayStation 5, Switch OLED, Steam Deck"
+            />
+            <span class="field-error" id="err-modelo"></span>
+          </div>
+
+          <div class="form-group flex-1">
+            <label for="formMarca">Fabricante / Marca <span class="required">*</span></label>
+            <input
+              type="text"
+              id="formMarca"
+              name="marca"
+              required
+              placeholder="Ex: Sony, Nintendo, Microsoft"
+            />
+            <span class="field-error" id="err-marca"></span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label for="formGenero">Gênero / Categoria <span class="required">*</span></label>
+            <select id="formGenero" name="genero" required>
+              <option value="">Selecione...</option>
+              <option value="Console de Mesa">Console de Mesa</option>
+              <option value="Portátil">Portátil</option>
+              <option value="Retrô">Retrô</option>
+              <option value="Acessório Gamer">Acessório Gamer</option>
+              <option value="Realidade Virtual">Realidade Virtual</option>
+              <option value="Outro">Outro</option>
+            </select>
+            <span class="field-error" id="err-genero"></span>
+          </div>
+
+          <div class="form-group flex-1">
+            <label for="formAno">Ano de Lançamento <span class="required">*</span></label>
+            <input
+              type="number"
+              id="formAno"
+              name="ano"
+              required
+              min="1958"
+              max="2030"
+              step="1"
+              placeholder="Ex: 2020"
+            />
+            <span class="field-error" id="err-ano"></span>
+          </div>
+
+          <div class="form-group flex-1">
+            <label for="formPreco">Preço (R$) <span class="required">*</span></label>
+            <input
+              type="number"
+              id="formPreco"
+              name="preco"
+              required
+              min="0"
+              step="0.01"
+              placeholder="Ex: 3499.90"
+            />
+            <span class="field-error" id="err-preco"></span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="formFoto">URL da Foto do Aparelho <span class="required">*</span></label>
+          <input
+            type="url"
+            id="formFoto"
+            name="foto"
+            required
+            placeholder="https://exemplo.com/imagem-do-aparelho.jpg"
+          />
+          <span class="field-error" id="err-foto"></span>
+        </div>
+
+        <!-- Preview da Foto -->
+        <div class="image-preview-container">
+          <p class="preview-label">Pré-visualização da Imagem:</p>
+          <div class="preview-box">
+            <img id="imagePreview" src="" alt="Pré-visualização" class="hidden" />
+            <div id="previewPlaceholder" class="preview-placeholder">
+              <span>Nenhuma imagem informada</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnCancelModal" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" id="btnSubmitForm" class="btn btn-primary">
+            <span class="btn-text">Salvar Aparelho</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal de Confirmação de Exclusão -->
+  <div id="deleteModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <h2 id="deleteModalTitle">Confirmar Exclusão</h2>
+        <button id="btnCloseDeleteModal" class="btn-close-modal" aria-label="Fechar janela">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Tem certeza de que deseja excluir o aparelho <strong id="deleteGameName"></strong> do catálogo?</p>
+        <p class="modal-subtext">Esta operação removerá o registro permanentemente do banco de dados.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btnCancelDelete" class="btn btn-secondary">Cancelar</button>
+        <button type="button" id="btnConfirmDelete" class="btn btn-danger">Sim, Excluir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Container de Toasts/Notificações flutuantes -->
+  <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- JavaScript -->
+  <script src="js/app.js"></script>
+</body>
+</html>
